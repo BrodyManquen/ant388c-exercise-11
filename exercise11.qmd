@@ -1,0 +1,74 @@
+---
+title: "Exercise 11"
+format: html
+---
+
+## Load Data
+
+```{r}
+library(tidyverse)
+library(skimr)
+```
+```{r}
+d <- read_csv("https://raw.githubusercontent.com/difiore/ada-2024-datasets/main/AVONETdataset1.csv", col_names = TRUE)
+structure(d)
+```
+Winnow dataset:
+```{r}
+d <- d %>% select(Species1, Family1, Order1, Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length, Tail.Length, Mass, Habitat, Migration, Trophic.Level, Trophic.Niche, Min.Latitude, Max.Latitude, Centroid.Latitude, Primary.Lifestyle, Range.Size)
+```
+```{r}
+skim(d)
+```
+The 7 categorical variables are Species1, Family1, Order1, Habitat, Trophic.Level, Trophic.Niche, and Primary.Lifestyle.
+
+The 12 numeric variables are Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length, Tail.Length, Mass, Migration, Min.Latitude, Max.Latitude, Centroid.Latitude, and Range.Size.
+
+## One Factor ANOVA
+#### Step 1
+Boxplots of log(Mass) in relation to Trophic.Level and Migration:
+```{r}
+p1 <- ggplot(data=subset(d, !is.na(Trophic.Level)), aes(x=Trophic.Level, y=log(Mass)))+geom_boxplot(color="blue", fill="blue", alpha=0.2)
+p1
+```
+```{r}
+p2 <- ggplot(data=subset(d, !is.na(Migration)), aes(x=as.factor(Migration), y=log(Mass)))+geom_boxplot(color="blue", fill="blue", alpha=0.2)
+p2
+```
+#### Step 2
+```{r}
+m1 <- lm(log(Mass)~Trophic.Level, d)
+summary(m1)
+```
+
+```{r}
+d$Migration <- as.factor(d$Migration)
+m2 <- lm(log(Mass)~Migration, d)
+summary(m2)
+```
+
+The F-Statistic of each model is large enough to reject the null hypothesis that the F value is equal to zero.
+
+Migration level 1 is the reference level.
+
+Here is the same model with Migration releveled to 3.
+```{r}
+s <- d
+s$Migration<-relevel(s$Migration, ref=3)
+m3 <- lm(log(Mass)~Migration, s)
+summary(m3)
+```
+
+#### Step 3
+
+```{r}
+m <- aov(log(Mass) ~ Migration, data = d)
+posthoc <- TukeyHSD(m, which = "Migration", ordered = TRUE, conf.level = 0.95)
+plot(posthoc)
+```
+The 2-1 categories differ significantly from each other.
+
+#### Step 4
+
+
+
