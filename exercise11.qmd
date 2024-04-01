@@ -6,9 +6,13 @@ format: html
 ## Load Data
 
 ```{r}
+#| message : false
 library(tidyverse)
 library(skimr)
+library(infer)
+library(broom)
 ```
+
 ```{r}
 d <- read_csv("https://raw.githubusercontent.com/difiore/ada-2024-datasets/main/AVONETdataset1.csv", col_names = TRUE)
 structure(d)
@@ -69,6 +73,144 @@ plot(posthoc)
 The 2-1 categories differ significantly from each other.
 
 #### Step 4
+create log.Mass variable because the *specify* function does not like log(Mass)
+```{r}
+d <- d %>%
+  mutate(log.Mass=log(Mass))
+```
+Permute the F stat with the {infer} package
+```{r}
+permuted.F <- d %>%
+  specify(log.Mass ~ Trophic.Level) %>%  # specify model
+  hypothesize(null = "independence") %>% # null hypothesis of independence
+  generate(reps = 1000, type = "permute") %>%  # generate permutations
+  calculate(stat = "F") # calculate the F statistic for the AOV
+```
+Create an "original" F stat using aov function
+```{r}
+original.F <- aov(data = d, log.Mass ~ Trophic.Level) %>%
+  tidy() %>%
+  filter(term=="Trophic.Level")
+visualize(permuted.F) +
+  shade_p_value(obs_stat=original.F$statistic, direction="greater")
+```
+Generate p value
+```{r}
+p.value <- permuted.F %>%
+  get_p_value(obs_stat = original.F$statistic, direction="greater")
+p.value
+```
 
+The p value is zero, allowing us to reject the null hypothesis that there is no difference in log(Mass) between the trophic level groups.
 
+## Challenge 2
 
+#### Step 1
+
+Get residuals, add to dataframe
+```{r}
+rbl <- lm(log(Beak.Length_Culmen)~log(Mass), d)
+rtl <- lm(log(Tarsus.Length)~log(Mass), d)
+
+d <- d %>% mutate(
+  rel.beak.length=rbl$residuals,
+  rel.tarsus.length=rtl$residuals
+)
+head(d)
+```
+#### Step 2
+Relative Tarsus Length vs. Primary Lifestyle
+```{r}
+p3 <- ggplot(data=subset(d, !is.na(Primary.Lifestyle)), aes(x=Primary.Lifestyle, y=rel.tarsus.length))+geom_boxplot(color="blue", fill="blue", alpha=0.2)
+p3
+```
+Relative Beak Length vs. Trophic Niche
+```{r}
+p4 <- ggplot(data=subset(d, !is.na(Trophic.Niche)), aes(x=Trophic.Niche, y=rel.beak.length))+geom_boxplot(color="blue", fill="blue", alpha=0.2)
+p4
+```
+
+#### Step 3
+
+```{r}
+m.aov <- aov(data = subset(d, !is.na(Migration)), log(Range.Size) ~ Migration)
+summary(m.aov)
+```
+The range size does appear to be significantly related to the migration categorization. 
+```{r}
+m.lm <- lm(log(Range.Size) ~ Migration, data = subset(d, !is.na(Migration)))
+tidy(m.lm)
+```
+Categories 2 and 3 are significantly different from reference level of 1. 
+Relevel to 3:
+```{r}
+d$Migration<-relevel(d$Migration, ref=3)
+m.lm2 <- lm(log(Range.Size) ~ Migration, data = subset(d, !is.na(Migration)))
+tidy(m.lm2)
+```
+Categories 1 and 2 are significantly different from the reference level of 3. 
+
+Post-Hoc Tukey HSD:
+```{r}
+posthoc2 <- TukeyHSD(m.aov, which = "Migration", ordered = TRUE, conf.level = 0.95)
+plot(posthoc2, xlim=c(-1,3))
+```
+
+The post-hoc Tukey Honest Significant Differences test shows the largest difference between categories is between 1 and 3. All categories, however, are significantly different from one another.
+
+#### Step 4
+Get Passeriformes:
+```{r}
+pass <- d %>% filter(Order1=="Passeriformes")
+```
+
+##### Relative Beak Length vs Primary Lifestyle
+
+```{r}
+p5 <- ggplot(data=subset(pass, !is.na(Primary.Lifestyle)), aes(x=Primary.Lifestyle, y=rel.beak.length))+geom_boxplot(color="blue", fill="blue", alpha=0.2)
+p5
+```
+
+```{r}
+passRBL_PL <- aov(data = subset(pass, !is.na(Primary.Lifestyle)), rel.beak.length ~ Primary.Lifestyle)
+summary(passRBL_PL)
+```
+
+```{r}
+passRBL_PL.lm <- lm(rel.beak.length ~ Primary.Lifestyle, data = subset(pass, !is.na(Primary.Lifestyle)))
+summary(passRBL_PL.lm)
+```
+##### Relative Beak Length vs Trophic Level
+
+```{r}
+p6 <- ggplot(data=subset(pass, !is.na(Trophic.Level)), aes(x=Trophic.Level, y=rel.beak.length))+geom_boxplot(color="blue", fill="blue", alpha=0.2)
+p6
+```
+
+```{r}
+passRBL_TL <- aov(data = subset(pass, !is.na(Trophic.Level)), rel.beak.length ~ Trophic.Level)
+summary(passRBL_TL)
+```
+
+```{r}
+passRBL_TL.lm <- lm(rel.beak.length ~ Trophic.Level, data = subset(pass, !is.na(Trophic.Level)))
+summary(passRBL_TL.lm)
+```
+
+#### Step 5
+
+```{r}
+
+```
+
+#### Step 6
+
+```{r}
+
+```
+
+#### Step 7
+
+```{r}
+
+```
