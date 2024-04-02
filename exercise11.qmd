@@ -6,7 +6,7 @@ format: html
 ## Load Data
 
 ```{r}
-#| message : false
+#| warning: false
 library(tidyverse)
 library(skimr)
 library(infer)
@@ -14,16 +14,15 @@ library(broom)
 ```
 
 ```{r}
+#| message: false
 d <- read_csv("https://raw.githubusercontent.com/difiore/ada-2024-datasets/main/AVONETdataset1.csv", col_names = TRUE)
-structure(d)
 ```
 Winnow dataset:
 ```{r}
 d <- d %>% select(Species1, Family1, Order1, Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length, Tail.Length, Mass, Habitat, Migration, Trophic.Level, Trophic.Niche, Min.Latitude, Max.Latitude, Centroid.Latitude, Primary.Lifestyle, Range.Size)
-```
-```{r}
 skim(d)
 ```
+
 The 7 categorical variables are Species1, Family1, Order1, Habitat, Trophic.Level, Trophic.Niche, and Primary.Lifestyle.
 
 The 12 numeric variables are Beak.Length_Culmen, Beak.Width, Beak.Depth, Tarsus.Length, Wing.Length, Tail.Length, Mass, Migration, Min.Latitude, Max.Latitude, Centroid.Latitude, and Range.Size.
@@ -44,6 +43,7 @@ p2
 m1 <- lm(log(Mass)~Trophic.Level, d)
 summary(m1)
 ```
+While the F Stat shows that the model is significant, the "Omnivore" trophic level does not significantly relate to log(Mass).
 
 ```{r}
 d$Migration <- as.factor(d$Migration)
@@ -68,9 +68,9 @@ summary(m3)
 ```{r}
 m <- aov(log(Mass) ~ Migration, data = d)
 posthoc <- TukeyHSD(m, which = "Migration", ordered = TRUE, conf.level = 0.95)
-plot(posthoc)
+plot(posthoc, xlim=c(-0.5, 1))
 ```
-The 2-1 categories differ significantly from each other.
+All levels of migration are significantly different from the null, which would hold if the confidence intervals intersected with zero. The 2-1 categories differ the most from each other compared to other category combinations.
 
 #### Step 4
 create log.Mass variable because the *specify* function does not like log(Mass)
@@ -199,18 +199,66 @@ summary(passRBL_TL.lm)
 
 #### Step 5
 
+Check for similar variances:
 ```{r}
+stats <- pass %>% group_by(Primary.Lifestyle, Trophic.Level) %>%
+  summarize("mean(rel.beak.length)" = mean(rel.beak.length),
+    "sd(rel.beak.length)"= sd(rel.beak.length))
 
+max(stats$`sd(rel.beak.length)`)/min(stats$`sd(rel.beak.length)`)
 ```
+```{r}
+# check that variances in each group are roughly equal (ratio of max/min is <2)
+p7 <- ggplot(data=subset(pass, !is.na(Trophic.Level)), aes(y = rel.beak.length, x = Primary.Lifestyle)) + geom_boxplot() +
+  facet_wrap(~Trophic.Level, ncol=4) +
+  xlab("Primary Lifestyle") + ylab("Relative Beak Length")
+# and let's plot what the data look like
+# p <- p + geom_point() # uncommenting this shows all points
+#p <- p + stat_summary(data=d, aes(y = femur_length, x = sex),
+ # fun = base::mean,
+  # make sure we use {base} version of mean
+ # color = "darkgreen", geom = "point", shape = 8, size = 6)
+#p
+p7
+```
+
+Check each ANOVA separately:
+```{r}
+summary(aov(data=pass, rel.beak.length ~ Primary.Lifestyle))
+```
+```{r}
+summary(aov(data=pass, rel.beak.length ~ Trophic.Level))
+```
+There seems to be a significant relationship for both variables.
+
+##### Multiple ANOVA:
+
+```{r}
+pass_aov_mult <- aov(data = pass, rel.beak.length ~ Primary.Lifestyle+Trophic.Level)
+summary(pass_aov_mult)
+```
+This model result suggests that both variables are significant predictors of relative beak length. The trophic level of each species appears to have a larger impact on this variable than does primary lifestyle, although the difference is not very large.
 
 #### Step 6
 
 ```{r}
-
+pass_aov_int <- aov(data = pass, rel.beak.length ~ Primary.Lifestyle+Trophic.Level+Primary.Lifestyle:Trophic.Level)
+summary(pass_aov_int)
 ```
+
+After considering interactions, it seems that while the two independent categories are still the best predictors of relative beak length, a small but significant interaction between the two categories also contributes to the result. 
 
 #### Step 7
 
 ```{r}
-
+interaction.plot(
+  x.factor = pass$Primary.Lifestyle,
+  xlab = "Primary Lifestyle",
+  trace.factor = pass$Trophic.Level,
+  trace.label = "Trophic Level",
+  response = pass$rel.beak.length,
+  fun = base::mean, # make sure we use {base} version
+  ylab = "Relative Beak Length"
+)
 ```
+Where the interaction plot is parallel, there is no interaction. This is seen well in comparing the **omnivore** and **herbivore** plots. However, the **carnivore** plot shows interaction with the **omnivore** plot, as they are not parallel and intersect. 
